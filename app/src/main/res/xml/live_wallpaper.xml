@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wallpaper
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:thumbnail="@mipmap/ic_launcher"
+    android:description="@string/wallpaper_desc"
+    android:author="@string/author"
+    android:settingsActivity="com.example.livewallpaper.resource_wall.ResourceSettings"/>
