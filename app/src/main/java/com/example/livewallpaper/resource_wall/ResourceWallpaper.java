@@ -1,28 +1,21 @@
 package com.example.livewallpaper.resource_wall;
 
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.BitmapRegionDecoder;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.service.wallpaper.WallpaperService;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
-import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.WindowManager;
-
 import com.example.livewallpaper.R;
 import com.example.livewallpaper.utils.BitmapGenerator;
-import com.example.livewallpaper.utils.BitmapHelper;
-
 import java.util.Objects;
 
 public class ResourceWallpaper extends WallpaperService {
