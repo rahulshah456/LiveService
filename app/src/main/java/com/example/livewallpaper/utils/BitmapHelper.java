@@ -3,7 +3,10 @@ package com.example.livewallpaper.utils;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Matrix;
+import android.os.Build;
 import android.util.Log;
+
+import java.util.Locale;
 
 public final class BitmapHelper {
 
@@ -100,6 +103,29 @@ public final class BitmapHelper {
     matrix.postScale(scale, scale);
     b = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
     return b;
+  }
+
+
+  public static String getSize(Bitmap data) {
+    long size = data.getByteCount();
+    long n = 1000;
+    String s = "";
+    double kb = size / n;
+    double mb = kb / n;
+    double gb = mb / n;
+    double tb = gb / n;
+    if(size < n) {
+      s = size + " Bytes";
+    } else if(size >= n && size < (n * n)) {
+      s =  String.format(Locale.US,"%.2f", kb) + " KB";
+    } else if(size >= (n * n) && size < (n * n * n)) {
+      s = String.format(Locale.US,"%.2f", mb) + " MB";
+    } else if(size >= (n * n * n) && size < (n * n * n * n)) {
+      s = String.format(Locale.US,"%.2f", gb) + " GB";
+    } else if(size >= (n * n * n * n)) {
+      s = String.format(Locale.US,"%.2f", tb) + " TB";
+    }
+    return s;
   }
 
 }

@@ -5,7 +5,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.os.Handler;
 import android.service.wallpaper.WallpaperService;
 import android.util.Log;
@@ -16,6 +15,7 @@ import android.view.SurfaceHolder;
 import android.view.WindowManager;
 import com.example.livewallpaper.R;
 import com.example.livewallpaper.utils.BitmapGenerator;
+
 import java.util.Objects;
 
 public class ResourceWallpaper extends WallpaperService {
@@ -58,15 +58,21 @@ public class ResourceWallpaper extends WallpaperService {
     class ResourceEngine extends Engine {
 
         private final String TAG = ResourceEngine.class.getSimpleName();
+
+        // Runnable Threads
         private final Handler handler = new Handler();
         private final Runnable animate = new Runnable() {
             public void run() {
-                showNewImage();
                 incrementCounter();
+                showNewImage();
+            }
+        };
+        private final Runnable fadeAnimate = new Runnable() {
+            public void run() {
+                fadeTransition(currentBitmap, currentAlpha);
             }
         };
 
-        private Rect surfaceFrame = getSurfaceHolder().getSurfaceFrame();
         private GestureDetector doubleTapDetector;
         private final BitmapFactory.Options options = new BitmapFactory.Options();
         private final BitmapFactory.Options optionsScale = new BitmapFactory.Options();
@@ -80,22 +86,17 @@ public class ResourceWallpaper extends WallpaperService {
         private final Paint imagePaint;
 
         // temporary parameters
-        private int xPixelOffset;
-        private float xOffset;
-        private float xOffsetStep;
         private int desiredMinimumWidth;
         private int desiredMinimumHeight;
         private int currentAlpha;
         private int mImagesArrayIndex = 0;
 
         // booleans for wallpaper settings
-        private boolean isScrolling = false;
         private boolean allowClickToChange = true;
         private boolean isFadeTransition = true;
-        private boolean isStretch = true;
 
         // scope time booleans
-        private boolean visible = false;
+        private boolean isVisible = false;
         private boolean imageIsSetup = false;
         private boolean isRotated = false;
 
@@ -123,7 +124,7 @@ public class ResourceWallpaper extends WallpaperService {
          */
         @Override
         public void onSurfaceDestroyed(SurfaceHolder surfaceHolder) {
-            visible = false;
+            isVisible = false;
             handler.removeCallbacks(fadeAnimate);
             handler.removeCallbacks(animate);
         }
@@ -135,8 +136,8 @@ public class ResourceWallpaper extends WallpaperService {
             this.desiredMinimumHeight = getDesiredMinimumHeight();
 
             // preview of initial image
+            Log.d(TAG, "onCreate: showNewImage called!");
             showNewImage();
-            incrementCounter();
         }
         @Override
         public void onDestroy() {
@@ -154,19 +155,19 @@ public class ResourceWallpaper extends WallpaperService {
         @Override
         public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
             // This happens when wallpaper change
-            imageIsSetup = false;
-            isRotated = true;
             this.desiredMinimumWidth = width;
             this.desiredMinimumHeight = height;
+            imageIsSetup = false;
+            isRotated = true;
             Log.d(TAG, "onSurfaceChanged: drawBitmap Called!");
             drawBitmap(currentBitmap);
         }
         @Override
-        public void onVisibilityChanged(boolean visible) {
-            this.visible = visible;
+        public void onVisibilityChanged(boolean isVisible) {
+            this.isVisible = isVisible;
 
             // onVisibilityChanged can be called on screen rotation.
-            if (visible) {
+            if (isVisible) {
                 // if there is a bitmap with time left to keep around, redraw it
                 if (systemTime() - timeStarted + 100 < timer) {
                     // for some reason, it's sometimes recycled!
@@ -181,30 +182,22 @@ public class ResourceWallpaper extends WallpaperService {
                     handler.postDelayed(animate, timer - (systemTime() - timeStarted));
                 } else {
                     // otherwise draw a new one since it's time for a new one
+                    Log.d(TAG, "onVisibilityChanged: showNewImage Called!");
                     showNewImage();
-                    incrementCounter();
                 }
             } else {
+                Log.d(TAG, "onVisibilityChanged: Handlers Removed!");
                 handler.removeCallbacks(fadeAnimate);
                 handler.removeCallbacks(animate);
+                if (isFadeTransition & mImagesArrayIndex>0){
+                    imagePaint.setAlpha(255);
+                    Log.d(TAG, "onVisibilityChanged: Fading removed!");
+                }
             }
         }
         @Override
         public void onTouchEvent(MotionEvent event) {
             this.doubleTapDetector.onTouchEvent(event);
-        }
-        @Override
-        public void onOffsetsChanged(float xOffset, float yOffset, float xOffsetStep,
-                                     float yOffsetStep, int xPixelOffset, int yPixelOffset) {
-            // an extra check -- this function seems to be called often for some
-            // reason
-            if (this.xPixelOffset != xPixelOffset * -1 || this.xOffset != xOffset || this.xOffsetStep != xOffsetStep) {
-                this.xPixelOffset = xPixelOffset * -1;
-                this.xOffset = xOffset;
-                this.xOffsetStep = xOffsetStep;
-                Log.d(TAG, "onOffsetsChanged: drawBitmap Called!");
-                drawBitmap(currentBitmap);
-            }
         }
 
 
@@ -214,7 +207,7 @@ public class ResourceWallpaper extends WallpaperService {
          * @param bitmap the bitmap to draw
          */
         private void drawBitmap(Bitmap bitmap) {
-            Log.d(TAG, "drawBitmap: index = " + mImagesArrayIndex);
+            Log.d(TAG, "drawBitmap: " + mImagesArrayIndex);
 
             if (bitmap == null) {
                 Log.d(TAG, "bitmap == null!");
@@ -223,19 +216,6 @@ public class ResourceWallpaper extends WallpaperService {
 
             int virtualWidth = this.desiredMinimumWidth;
             int virtualHeight = this.desiredMinimumHeight;
-
-            // shouldn't happen
-            if (surfaceFrame == null) {
-                Log.d(TAG, "surfaceFrame == null!");
-            }
-
-
-            // create Rectangular window for bitmap loading
-            if (!isScrolling) {
-                // virtual width becomes screen width
-                virtualWidth = this.desiredMinimumWidth;
-                xPixelOffset = 0;
-            }
 
 
             // not sure why but it happens
@@ -259,11 +239,7 @@ public class ResourceWallpaper extends WallpaperService {
                 }
                 currentBitmap = bitmap;
 
-//                if (!isRotated) {
-//                    currentBitmap = bitmap;
-//                } else {
-//                    isRotated = false;
-//                }
+
                 System.gc();
                 Log.d(TAG, "drawBitmap: cropping finished!");
             }
@@ -289,7 +265,7 @@ public class ResourceWallpaper extends WallpaperService {
          * when the next frame should be drawn
          */
         void showNewImage() {
-            Log.d(TAG, "showNewImage: index = " + mImagesArrayIndex);
+            Log.d(TAG, "showNewImage: " + mImagesArrayIndex);
 
             if (currentBitmap != null)
                 currentBitmap.recycle();
@@ -301,7 +277,7 @@ public class ResourceWallpaper extends WallpaperService {
                 currentBitmap = BitmapFactory.decodeResource(getResources(),
                         mImagesArray[mImagesArrayIndex], options);
                 imageIsSetup = false;
-                if (isFadeTransition) {
+                if (isFadeTransition & mImagesArrayIndex>0) {
                     fadeTransition(currentBitmap, 0);
                 } else {
                     Log.d(TAG, "showNewImage: drawBitmap Called!");
@@ -321,7 +297,7 @@ public class ResourceWallpaper extends WallpaperService {
                 } catch (OutOfMemoryError e2) {
                     Log.e(TAG, "Scale failed: incremented to new wallpaper");
                     // skip to next image.
-                    incrementCounter();
+                    Log.d(TAG, "showNewImage: showNewImage Called!");
                     showNewImage();
                     return;
                 }
@@ -332,10 +308,12 @@ public class ResourceWallpaper extends WallpaperService {
              * one.
              */
             handler.removeCallbacks(animate);
-            if (visible) {
+            if (isVisible) {
                 handler.postDelayed(animate, timer);
                 timeStarted = systemTime();
             }
+
+            System.gc();
         }
 
 
@@ -347,7 +325,6 @@ public class ResourceWallpaper extends WallpaperService {
                     Objects.requireNonNull(getSystemService(WINDOW_SERVICE))).getDefaultDisplay();
             return display.getRotation();
         }
-
 
 
         /**
@@ -375,15 +352,10 @@ public class ResourceWallpaper extends WallpaperService {
              */
             handler.removeCallbacks(fadeAnimate);
             // stop when at full opacity
-            if (visible && currentAlpha < 255) {
+            if (isVisible && currentAlpha < 255) {
                 handler.post(fadeAnimate);
             }
         }
-        private final Runnable fadeAnimate = new Runnable() {
-            public void run() {
-                fadeTransition(currentBitmap, currentAlpha);
-            }
-        };
 
 
         /**
